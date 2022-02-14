@@ -4,6 +4,7 @@
  * A class to test the methods required for Assignment 3
  *
  */
+
 public class A3Tester {
     
 	private static int testPassCount = 0;
