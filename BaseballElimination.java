@@ -43,7 +43,7 @@ public class BaseballElimination{
     public int[] wins;
     public int[] gamesLeft;
     public int[][] gamesRemaining;
-	public int sourceCapactiy = 0; 
+	public int sourceCapactiy; 
 
 	/* parseInput(s)
         Parses the input from the given Scanner.
@@ -66,18 +66,6 @@ public class BaseballElimination{
         }
     }
 	
-	/* testParseInput()
-        Tests the parseInput function with sample input.
-    */
-    public void testParseInput() {
-        System.out.println("Number of teams: " + numTeams);
-		System.out.println("Team\t\tWins\tGames Left\tRemaining games");
-		for (int i = 0; i < numTeams; i++) {
-			System.out.printf("%-13s\t%d\t%d\t%s%n", teamNames[i], wins[i], gamesLeft[i], Arrays.toString(gamesRemaining[i]));
-		}
-    }
-	
-
 	/* createFlowNetwork()
         Creates the flow network
     */
@@ -99,7 +87,14 @@ public class BaseballElimination{
 			int capacity = wins[excludeTeam] + gamesLeft[excludeTeam] - wins[i]; 
 			flowNetwork.addEdge(new FlowEdge(k, sink, Math.max(0, capacity))); 
 			k++;
-		} // This is done in a little bit of a counter intuvtve way
+		} 
+		/** 
+		This is done in a little bit of a counter intutive way. By adding these first the team vertices
+		first numbering is kept simpler(personally) for attaching the games to teams in the loop below.
+		Since the underlying networkflow is practically the same, just numbered differently and we are
+		only comparing output anyhow I elected to keep this but wanted to provide some clarity for the 
+		markers
+		**/
 		
 		int vertex = sink-1;
 		//Source -> Games -> Team
@@ -128,9 +123,12 @@ public class BaseballElimination{
        Checks if a team with the given index is eliminated.
 	   Returns true if eliminated, false otherwise
     */
-    public boolean isEliminated(FlowNetwork flowNetwork, int teamIndex) {
+    public boolean isEliminated(int teamIndex) {
+		sourceCapactiy = 0;
+		FlowNetwork flowNetwork = createFlowNetwork(teamIndex);
         FordFulkerson fordFulkerson = new FordFulkerson(flowNetwork, 0, flowNetwork.V() - 1);
         double maxFlow = fordFulkerson.value();
+		System.out.println(teamNames[teamIndex] + " with max flow of " + maxFlow + " and sourceCapactiy of "  sourceCapactiy);
         return maxFlow < sourceCapactiy;
     }
     
@@ -144,19 +142,14 @@ public class BaseballElimination{
         for (int i = 0; i < numTeams; i++) {
 			if(i == teamIndex) continue;
             if (maxPossibleWins < wins[i]) {
-				System.out.println(teamNames[teamIndex] + ",  eliminated in Fes Check. With " + maxPossibleWins + " wins,");
-				
+			System.out.println(teamNames[teamIndex] + " in Fes Check");
 				eliminated.add(teamNames[teamIndex]);
 				return false;
 			}
 		}
 		return true;
 	}
-
-	public static void printFlowNetwork(FlowNetwork flowNetwork) {
-		System.out.println("Flow Network:");
-        System.out.println(flowNetwork.toString());
-    }
+	
 	/* BaseballElimination(s)
 		Given an input stream connected to a collection of baseball division
 		standings we determine for each division which teams have been eliminated 
@@ -170,10 +163,8 @@ public class BaseballElimination{
 		
 		for(int i = 0; i < numTeams; i++){
 			if(!feasibilityCheck(i)) continue;
-			sourceCapactiy = 0; //reset 
 			
-			FlowNetwork flowNetwork = createFlowNetwork(i);	
-			if(isEliminated(flowNetwork, i)){
+			if(isEliminated(i)){
 				eliminated.add(teamNames[i]);
 			}
 		}
