@@ -43,6 +43,7 @@ public class BaseballElimination{
     public int[] wins;
     public int[] gamesLeft;
     public int[][] gamesRemaining;
+	public int sourceCapactiy = 0; 
 
 	/* parseInput(s)
         Parses the input from the given Scanner.
@@ -81,95 +82,81 @@ public class BaseballElimination{
         Creates the flow network
     */
     public FlowNetwork createFlowNetwork(int excludeTeam) {
-		int numVertices = numTeams * (numTeams - 1) / 2 + numTeams + 2;
-		FlowNetwork flowNetwork = new FlowNetwork(numVertices);
-        
+		int numVertices = ((numTeams-1) * (numTeams - 2) / 2)	+ (numTeams-1) + 2;
 		int source = 0;
-        int sink = numVertices-1;
-		int gameVertices = numTeams * (numTeams - 1) / 2; //where vertices of games end
-		int teamVertices = gameVertices + 1; //where vertices of teams start
-		int vertex= 1;
+		int sink = numVertices-1;
+		FlowNetwork flowNetwork = new FlowNetwork(numVertices);
 		
-		//Source -> Games
+		if(excludeTeam >= numTeams){
+			return flowNetwork;
+		}
+		
+		// Teams -> Sink
+		int k = 1;
+		for (int i = 0; i < numTeams; i++) {
+			if (i == excludeTeam) continue; // Exclude the specified team
+			
+			int capacity = wins[excludeTeam] + gamesLeft[excludeTeam] - wins[i]; 
+			flowNetwork.addEdge(new FlowEdge(k, sink, Math.max(0, capacity))); 
+			k++;
+		} // This is done in a little bit of a counter intuvtve way
+		
+		int vertex = sink-1;
+		//Source -> Games -> Team
 		for (int i = 0; i < numTeams; i++) {
 			if(i == excludeTeam) continue; //exclude specficed team since we are assuming they win all 
+			
             for (int j = i+1; j < numTeams; j++) {
 				 if (j == excludeTeam) continue; // Exclude the specified team
 
-				flowNetwork.addEdge(new FlowEdge(source, vertexCounter, gamesRemaining[i][j]));
-                
-				
+				// connect source to games
+				flowNetwork.addEdge(new FlowEdge(source, vertex, gamesRemaining[i][j]));
+				sourceCapactiy = sourceCapactiy + gamesRemaining[i][j];
+						
 				// Connect game vertex to team vertices i and j
-				double flowCapacity = edge.capacity();
-				FlowEdge edgeToI = new FlowEdge(vertexCounter, gameVertices + i + 1, flowCapacity);
-				FlowEdge edgeToJ = new FlowEdge(vertexCounter, gameVertices + j + 1, flowCapacity);
-				flowNetwork.addEdge(edgeToI);
-				flowNetwork.addEdge(edgeToJ);
-				
-				vertex++;	
-            }
-        }
-		
-		//TODO:
-		/*
-		Currently I have completed source -> games. Am working on games -> teams 
-		Then I need to implement teams -> sink 
-		Then we can start logic to see inflow
-		*/
-		/*
-		int teamVerticesStart = gameVertices + 1;
-		int teamVerticesEnd = teamVerticesStart + numTeams - 1;
-
-		// Connect games to teams
-		for (int gameVertex = 1; gameVertex <= gameVertices; gameVertex++) {
-			int gameTeam1, gameTeam2;
-			if (gameVertex <= (numTeams - 1) * numTeams / 2) {
-				gameTeam1 = ((int) (Math.sqrt(1 + 8 * gameVertex) - 1) / 2);
-				gameTeam2 = gameVertex - (gameTeam1 * (numTeams - 1) - (gameTeam1 * (gameTeam1 + 1)) / 2);
-				gameTeam2 += (gameTeam2 >= gameTeam1) ? 1 : 0;
-			} else {
-				gameTeam1 = numTeams - 2;
-				gameTeam2 = numTeams - 1;
-			}
-
-			if (gameTeam1 != excludeTeam && gameTeam2 != excludeTeam) {
-				FlowEdge edgeToTeam1 = new FlowEdge(gameVertex, teamVerticesStart + gameTeam1, Double.POSITIVE_INFINITY);
-				FlowEdge edgeToTeam2 = new FlowEdge(gameVertex, teamVerticesStart + gameTeam2, Double.POSITIVE_INFINITY);
-				flowNetwork.addEdge(edgeToTeam1);
-				flowNetwork.addEdge(edgeToTeam2);
+				flowNetwork.addEdge(new FlowEdge(vertex, i, Double.POSITIVE_INFINITY));
+				flowNetwork.addEdge(new FlowEdge(vertex, j, Double.POSITIVE_INFINITY));
+						
+				vertex--;
 			}
 		}
-
-		// Connect teams to sink
-		for (int teamVertex = teamVerticesStart; teamVertex <= teamVerticesEnd; teamVertex++) {
-			int team = teamVertex - teamVerticesStart;
-			if (team != excludeTeam) {
-				FlowEdge edgeToSink = new FlowEdge(teamVertex, sink, wins[excludeTeam] + gamesLeft[excludeTeam] - wins[team]);
-				flowNetwork.addEdge(edgeToSink);
-			}
-		} */
-        printFlowNetwork(flowNetwork);
-		
-        // Now, use Ford-Fulkerson algorithm to compute max flow
-        FordFulkerson fordFulkerson = new FordFulkerson(flowNetwork, source, sink);
-        
-        // Retrieve the maximum flow value
-        double maxFlow = fordFulkerson.value();
-        
-        // Output the maximum flow value
-        System.out.println("Maximum flow from source to sink: " + maxFlow);
-		
-		
-
+     
         return flowNetwork;
     }
 	
+	/* isEliminated(teamIndex)
+       Checks if a team with the given index is eliminated.
+	   Returns true if eliminated, false otherwise
+    */
+    public boolean isEliminated(FlowNetwork flowNetwork, int teamIndex) {
+        FordFulkerson fordFulkerson = new FordFulkerson(flowNetwork, 0, flowNetwork.V() - 1);
+        double maxFlow = fordFulkerson.value();
+        return maxFlow < sourceCapactiy;
+    }
+    
+	/* feasibilityCheck(teamIndex)
+       Checks if a team with the given index is already eliminated without constructing the flow network.
+       Returns true if eliminated, false otherwise.
+    */
+    public boolean feasibilityCheck(int teamIndex) {
+		int maxPossibleWins = wins[teamIndex] + gamesLeft[teamIndex];
+
+        for (int i = 0; i < numTeams; i++) {
+			if(i == teamIndex) continue;
+            if (maxPossibleWins < wins[i]) {
+				System.out.println(teamNames[teamIndex] + ",  eliminated in Fes Check. With " + maxPossibleWins + " wins,");
+				
+				eliminated.add(teamNames[teamIndex]);
+				return false;
+			}
+		}
+		return true;
+	}
+
 	public static void printFlowNetwork(FlowNetwork flowNetwork) {
 		System.out.println("Flow Network:");
         System.out.println(flowNetwork.toString());
     }
-		
-    
 	/* BaseballElimination(s)
 		Given an input stream connected to a collection of baseball division
 		standings we determine for each division which teams have been eliminated 
@@ -181,7 +168,15 @@ public class BaseballElimination{
 	public BaseballElimination(Scanner s){
 		parseInput(s);
 		
-		createFlowNetwork(1);
+		for(int i = 0; i < numTeams; i++){
+			if(!feasibilityCheck(i)) continue;
+			sourceCapactiy = 0; //reset 
+			
+			FlowNetwork flowNetwork = createFlowNetwork(i);	
+			if(isEliminated(flowNetwork, i)){
+				eliminated.add(teamNames[i]);
+			}
+		}
 	}
 		
 	/* main()
@@ -207,9 +202,6 @@ public class BaseballElimination{
 		}
 		
 		BaseballElimination be = new BaseballElimination(s);
-
-		//Test Parsing
-		be.testParseInput();
 		
 		if (be.eliminated.size() == 0)
 			System.out.println("No teams have been eliminated.");
@@ -220,3 +212,4 @@ public class BaseballElimination{
 	
 	
 }
+
